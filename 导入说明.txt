@@ -1,0 +1,46 @@
+罗盘项目（deep_agent_search）—— PyCharm 导入说明
+================================================
+
+【这是什么】
+DeepAgents 多智能体项目：主智能体协调三个子智能体
+（网络搜索 Tavily / 数据库查询 MySQL pharma_db / RAGFlow 知识库），
+支持生成 Markdown / PDF 报告。
+
+【已配置好的内容】
+- .env：LLM 走 siliconflow Qwen/Qwen3.6-35B-A3B（百炼 key 留了注释备用），
+  数据库用只读账号 pharma_ro（仅能 SELECT，防止误删数据）
+- SQL 工具已加只读白名单；agent 已加 600s 超时 + 熔断
+- .venv 虚拟环境已建好（依赖已装齐）
+
+【PyCharm 导入步骤】
+1. File → Open → 选择本文件夹（罗盘项目）
+2. 等待索引完成；若提示配置解释器：
+   Settings → Project → Python Interpreter → Add Interpreter → Existing
+   → 选 本文件夹\.venv\Scripts\python.exe
+3. 需要 MySQL 数据库（pharma_db @ localhost:3307）：
+   如果 Docker 里已有 my-mysql 容器 → docker start my-mysql 即可
+   如果没有 → 进入 sql\ 目录执行 docker compose up -d（首次会自动建库灌数据）
+
+【运行方式】
+方式零（网页界面，2026-10-11 新增）：
+    启动服务: uv run uvicorn api.server:app --port 8020
+    浏览器打开: http://localhost:8020/
+    前端源码在 ui\（改动后: cd ui && npm run build，产物拷到 ui_dist\）
+    注：8000 端口被「掌柜智库」项目占用，所以本项目用 8020
+
+方式一（冒烟测试，终端执行）：
+    uv run python -m agent.main_agent "查询库存最少的5种药品，生成库存预警清单Markdown"
+
+方式二（代码调用）：
+    from agent.main_agent import run_deep_agent
+    import asyncio
+    asyncio.run(run_deep_agent(query="你的问题", thread_id="任意线程号"))
+
+【注意事项】
+- RAGFlow 服务器（118.195.130.244）当前不可用（竞价实例已释放），
+  相关工具带熔断保护，不影响其他功能
+- 可调参数（.env 或环境变量）：
+    AGENT_TIMEOUT_SECONDS=600   单次任务整体超时
+    AGENT_RECURSION_LIMIT=40    最大步数
+    RAGFLOW_CALL_TIMEOUT=20     RAGFlow 单次调用超时
+- 修复前原始代码备份在 D:\deep_agent_search\_backup_before_fix_20261011\

@@ -1,0 +1,59 @@
+﻿
+> ui@0.0.0 build
+> vue-tsc -b && vite build
+
+[36mrolldown-vite v7.2.5 [32mbuilding client environment for production...[36m[39m
+[2K
+transforming...鉁?66 modules transformed.
+npm.cmd : [31m鉁?[39m Build failed in 205ms
+所在位置 行:503 字符: 65
++ ... 16-30-03\compass-cloud\ui; npm.cmd run build *> build_log.txt; Get-Co ...
++                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([31m鉁?[39m Build failed in 205ms 
+   :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+[31merror during build:
+[31mBuild failed with 1 error:
+
+[plugin vite:vue] C:/Users/zmy/WorkBuddy/2026-10-13-16-30-03/compass-cloud/ui/s
+rc/App.vue?vue&type=style&index=0&lang.css:1383:17
+CssSyntaxError: C:/Users/zmy/WorkBuddy/2026-10-13-16-30-03/compass-cloud/ui/src
+/App.vue:354:17: Missed semicolon
+    at Input.error (C:\Users\zmy\WorkBuddy\2026-10-13-16-30-03\compass-cloud\ui
+\node_modules\postcss\lib\input.js:135:16)
+    at Parser.checkMissedSemicolon (C:\Users\zmy\WorkBuddy\2026-10-13-16-30-03\
+compass-cloud\ui\node_modules\postcss\lib\parser.js:138:22)
+    at Parser.decl (C:\Users\zmy\WorkBuddy\2026-10-13-16-30-03\compass-cloud\ui
+\node_modules\postcss\lib\parser.js:296:12)
+    at Parser.other (C:\Users\zmy\WorkBuddy\2026-10-13-16-30-03\compass-cloud\u
+i\node_modules\postcss\lib\parser.js:401:18)
+    at Parser.parse (C:\Users\zmy\WorkBuddy\2026-10-13-16-30-03\compass-cloud\u
+i\node_modules\postcss\lib\parser.js:472:16)
+    at parse (C:\Users\zmy\WorkBuddy\2026-10-13-16-30-03\compass-cloud\ui\node_
+modules\postcss\lib\parse.js:11:12)
+    at new LazyResult (C:\Users\zmy\WorkBuddy\2026-10-13-16-30-03\compass-cloud
+\ui\node_modules\postcss\lib\lazy-result.js:165:16)
+    at Processor.process (C:\Users\zmy\WorkBuddy\2026-10-13-16-30-03\compass-cl
+oud\ui\node_modules\postcss\lib\processor.js:53:14)
+    at doCompileStyle (C:\Users\zmy\WorkBuddy\2026-10-13-16-30-03\compass-cloud
+\ui\node_modules\@vue\compiler-sfc\dist\compiler-sfc.cjs.js:19542:36)
+    at Object.compileStyleAsync (C:\Users\zmy\WorkBuddy\2026-10-13-16-30-03\com
+pass-cloud\ui\node_modules\@vue\compiler-sfc\dist\compiler-sfc.cjs.js:19462:10)
+[31m
+    at aggregateBindingErrorsIntoJsError (file:///C:/Users/zmy/WorkBuddy/2026-1
+0-13-16-30-03/compass-cloud/ui/node_modules/rolldown/dist/shared/src-CYkh2Ybc.m
+js:2659:18)
+    at unwrapBindingResult (file:///C:/Users/zmy/WorkBuddy/2026-10-13-16-30-03/
+compass-cloud/ui/node_modules/rolldown/dist/shared/src-CYkh2Ybc.mjs:2634:128)
+    at #build (file:///C:/Users/zmy/WorkBuddy/2026-10-13-16-30-03/compass-cloud
+/ui/node_modules/rolldown/dist/shared/src-CYkh2Ybc.mjs:4433:34)
+    at async buildEnvironment (file:///C:/Users/zmy/WorkBuddy/2026-10-13-16-30-
+03/compass-cloud/ui/node_modules/vite/dist/node/chunks/node.js:33468:64)
+    at async Object.build (file:///C:/Users/zmy/WorkBuddy/2026-10-13-16-30-03/c
+ompass-cloud/ui/node_modules/vite/dist/node/chunks/node.js:33871:19)
+    at async Object.buildApp (file:///C:/Users/zmy/WorkBuddy/2026-10-13-16-30-0
+3/compass-cloud/ui/node_modules/vite/dist/node/chunks/node.js:33868:153)
+    at async CAC.<anonymous> (file:///C:/Users/zmy/WorkBuddy/2026-10-13-16-30-0
+3/compass-cloud/ui/node_modules/vite/dist/node/cli.js:629:3)[39m
+
