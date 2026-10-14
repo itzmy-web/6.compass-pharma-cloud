@@ -9,6 +9,7 @@
 #   /                     Vue 前端构建产物（ui_dist/）
 import asyncio
 import io
+import shutil
 import uuid
 import zipfile
 from contextlib import asynccontextmanager
@@ -24,6 +25,31 @@ from api.monitor import manager
 PROJECT_DIR = Path(__file__).parents[1].resolve()
 OUTPUT_DIR = PROJECT_DIR / 'output'
 UPLOAD_DIR = PROJECT_DIR / 'upload'
+DEMO_DIR = PROJECT_DIR / 'demo' / 'reports'
+
+
+def _seed_demo_reports():
+    """首次启动时把 demo/reports 下的样例产物铺进 output/，让报告中心不空着。
+
+    只在 output/ 里没有 .demo_seeded 标记时执行一次：
+    - 已存在的同名文件绝不覆盖（用户自己生成的内容优先）
+    - 用户删掉样例报告后重启不会「复活」（标记位已落盘）
+    """
+    marker = OUTPUT_DIR / '.demo_seeded'
+    if marker.exists() or not DEMO_DIR.exists():
+        return
+    copied = 0
+    for src in DEMO_DIR.rglob('*'):
+        if not src.is_file():
+            continue
+        dst = OUTPUT_DIR / src.relative_to(DEMO_DIR)
+        if dst.exists():
+            continue
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst)
+        copied += 1
+    marker.write_text('seeded', encoding='utf-8')
+    print(f'[demo] 已铺入 {copied} 个样例产物到 output/')
 
 
 @asynccontextmanager
@@ -31,6 +57,7 @@ async def lifespan(app):
     # 把事件循环绑给 WebSocket 管理器，monitor 才能定向推送
     manager.set_loop(asyncio.get_running_loop())
     OUTPUT_DIR.mkdir(exist_ok=True)
+    _seed_demo_reports()
     yield
 
 app = FastAPI(title='罗盘项目 - deep_agent_search', lifespan=lifespan)

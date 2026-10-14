@@ -3,6 +3,9 @@ import { ref, onMounted, nextTick, computed } from 'vue'
 import axios from 'axios'
 import { marked } from 'marked'
 import LoginGate from './components/LoginGate.vue'
+import DataView from './components/DataView.vue'
+import ReportCenter from './components/ReportCenter.vue'
+import GuideView from './components/GuideView.vue'
 
 // Types
 interface Message {
@@ -40,6 +43,10 @@ const isSidebarOpen = ref(false)
 const fileList = ref<any[]>([])
 // 生成一个持久的会话ID，如果页面不刷新，ID不变
 const currentThreadId = ref<string>(crypto.randomUUID())
+
+// ========== 页面路由：每个导航项一个独立页面 ==========
+// chat=对话工作台 / data=数据快览 / reports=报告中心 / guide=使用指南
+const activeView = ref<'chat' | 'data' | 'reports' | 'guide'>('chat')
 
 // ========== 登录门禁 ==========
 // 每次打开（刷新）都先显示登录页；登录成功才进入任务工作台。
@@ -633,7 +640,6 @@ const renderMarkdown = (text: string) => {
 // ========== ⑪ 左侧栏：导航 / 新对话 / 导出对话 / 数据库速览 / 使用指南 ==========
 const isSideNavOpen = ref(false)      // 移动端抽屉开关
 const activeNav = ref('chat')
-const showGuide = ref(false)
 
 // 数据库速览（GET /api/db/stats）
 const dbStats = ref<{ drugs: number; inventory: number; sales_records: number } | null>(null)
@@ -688,65 +694,64 @@ const exportChat = () => {
   isSideNavOpen.value = false
 }
 
-// 侧边栏导航
+// 侧边栏导航：切到对应独立页面
 const navGo = (key: string) => {
   activeNav.value = key
   isSideNavOpen.value = false
   if (key === 'chat') {
-    ((document.querySelector('.input-container textarea') as HTMLElement | null)?.focus?.())
+    activeView.value = 'chat'
+    nextTick(() => ((document.querySelector('.input-container textarea') as HTMLElement | null)?.focus?.()))
   } else if (key === 'stats') {
-    openDataView()
+    activeView.value = 'data'
   } else if (key === 'files') {
-    openReportCenter()
+    activeView.value = 'reports'
   } else if (key === 'guide') {
-    showGuide.value = true
+    activeView.value = 'guide'
   }
 }
 
-// ========== ⑫ 侧栏增强：数据浏览弹层 / 快速提问 / 历史内嵌 ==========
-const showDataView = ref(false)
-const dbTables = ref<Array<{ name: string; rows: number }>>([])
-const activeTable = ref('')
-const tableData = ref<{ columns: string[]; rows: string[][] } | null>(null)
-const tableLoading = ref(false)
-
-const TABLE_LABELS: Record<string, string> = {
-  drugs: '药品主数据',
-  inventory: '库存记录',
-  sales_records: '销售记录',
+// 从其他页面点「去问一句」：切回对话页并自动发送
+const askFromPage = (q: string) => {
+  const text = (q || '').trim()
+  if (!text) return
+  activeNav.value = 'chat'
+  activeView.value = 'chat'
+  nextTick(() => quickAsk(text))
 }
 
-const loadTables = async () => {
-  try {
-    const res = await axios.get('/api/db/tables')
-    dbTables.value = res.data.tables || []
-    if (dbTables.value.length && !activeTable.value) {
-      await loadTable(dbTables.value[0]!.name)
-    }
-  } catch { dbTables.value = [] }
-}
-
-const loadTable = async (name: string) => {
-  activeTable.value = name
-  tableLoading.value = true
-  tableData.value = null
-  try {
-    const res = await axios.get('/api/db/table', { params: { name, limit: 20 } })
-    tableData.value = { columns: res.data.columns || [], rows: res.data.rows || [] }
-  } catch {
-    tableData.value = { columns: [], rows: [] }
-  }
-  tableLoading.value = false
-}
-
-const openDataView = async () => {
-  showDataView.value = true
-  isSideNavOpen.value = false
-  if (dbTables.value.length === 0) await loadTables()
-}
-
+// ========== ⑫ 侧栏增强：快速提问 / 历史内嵌 / 数据速览摘要 ==========
+// 数据浏览的完整实现已拆到 DataView 页，此处只保留侧栏摘要所需状态。
 // 会话文件数（报告文件徽标）
 const sessionFileCount = computed(() => reportTotal.value || fileList.value.length)
+
+// ===== 右侧「本次会话产物」面板 =====
+const SIDE_FILE_FILTERS = [
+  { key: '', label: '全部' },
+  { key: 'md', label: 'MD' },
+  { key: 'docx,doc,pdf', label: '文档' },
+  { key: 'csv,xlsx,xls,json', label: '数据' },
+  { key: 'png,jpg,jpeg,svg,gif', label: '图片' },
+  { key: 'txt,log,html', label: '文本' },
+]
+const sideFileFilter = ref('')
+const sideFileExt = (n: string) => (n.includes('.') ? n.split('.').pop()!.toLowerCase() : '')
+const sessionFileSize = computed(() => fileList.value.reduce((s, f) => s + (f.size || 0), 0))
+const sideFileView = computed(() => {
+  if (!sideFileFilter.value) return fileList.value
+  const want = new Set(sideFileFilter.value.split(','))
+  return fileList.value.filter((f) => want.has(sideFileExt(f.name)))
+})
+
+// 空状态引导：点一下直接去问
+const SIDE_FILE_HINTS = [
+  '查询阿莫西林的库存和价格',
+  '统计上个月销售额最高的 5 种药品',
+  '生成一份补货建议报告（Markdown）',
+]
+const sideAskHint = (q: string) => {
+  isSidebarOpen.value = false
+  askFromPage(q)
+}
 
 // 侧栏底部主题切换
 const sideThemeLabel = computed(() => (theme.value === 'dark' ? '浅色模式' : '深色模式'))
@@ -770,31 +775,14 @@ const SIDE_QUICK_PROMPTS = [
   '哪些药品库存低于安全线？生成补货建议',
 ]
 
-// ========== ⑬ 报告中心（跨会话汇总 / 筛选 / 打包下载 / 删除 / 预览） ==========
+// ========== ⑬ 报告中心（完整功能在 ReportCenter 页；此处只保留侧栏「最近报告」摘要） ==========
 interface ReportFile {
   name: string; path: string; rel: string; url: string
   session: string; ext: string; size: number; mtime: number
 }
 
-const showReportCenter = ref(false)
 const reportFiles = ref<ReportFile[]>([])
-const reportSessions = ref<Array<{ id: string; count: number; size: number }>>([])
-const reportLoading = ref(false)
 const reportTotal = ref(0)
-const reportExtKey = ref('')
-const reportSession = ref('')
-const reportKeyword = ref('')
-const reportSelected = ref<string[]>([]) // 选中的 rel
-
-const EXT_FILTERS = [
-  { key: '', label: '全部' },
-  { key: 'md', label: 'Markdown' },
-  { key: 'docx,doc', label: 'Word' },
-  { key: 'pdf', label: 'PDF' },
-  { key: 'csv,xlsx,xls', label: '表格' },
-  { key: 'png,jpg,jpeg,svg', label: '图片' },
-  { key: 'txt,json,log,html', label: '文本' },
-]
 
 const EXT_TAG: Record<string, string> = {
   md: 'MD', docx: 'DOCX', doc: 'DOC', pdf: 'PDF', csv: 'CSV', xlsx: 'XLSX', xls: 'XLS',
@@ -811,104 +799,28 @@ const fmtTime = (t: number) => {
   return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-const reportView = computed(() => {
-  let list = reportFiles.value
-  if (reportExtKey.value) {
-    const wanted = new Set(reportExtKey.value.split(',').map(s => s.trim()).filter(Boolean))
-    list = list.filter(f => wanted.has(f.ext))
-  }
-  if (reportSession.value) list = list.filter(f => f.session === reportSession.value)
-  const kw = reportKeyword.value.trim().toLowerCase()
-  if (kw) list = list.filter(f => f.name.toLowerCase().includes(kw) || f.rel.toLowerCase().includes(kw))
-  return list
-})
-
-const reportViewSize = computed(() => reportView.value.reduce((s, f) => s + f.size, 0))
-const reportAllChecked = computed(() =>
-  reportView.value.length > 0 && reportView.value.every(f => reportSelected.value.includes(f.rel))
-)
-
-const recomputeReportSessions = () => {
-  const m = new Map<string, { id: string; count: number; size: number }>()
-  for (const f of reportFiles.value) {
-    const s = m.get(f.session) || { id: f.session, count: 0, size: 0 }
-    s.count += 1
-    s.size += f.size
-    m.set(f.session, s)
-  }
-  reportSessions.value = [...m.values()].sort((a, b) => a.id.localeCompare(b.id))
-}
-
 const loadReports = async () => {
-  reportLoading.value = true
   try {
     const res = await axios.get('/api/reports')
     reportFiles.value = res.data.files || []
-    reportSessions.value = res.data.sessions || []
     reportTotal.value = res.data.total || 0
   } catch {
     reportFiles.value = []
-    reportSessions.value = []
     reportTotal.value = 0
   }
-  reportLoading.value = false
 }
 
-const openReportCenter = async () => {
-  showReportCenter.value = true
+// 打开报告中心页 / 数据快览页（侧栏按钮与导航共用）
+const openReportCenter = () => {
+  activeNav.value = 'files'
+  activeView.value = 'reports'
   isSideNavOpen.value = false
-  reportSelected.value = []
-  await loadReports()
 }
 
-const toggleReportSelect = (rel: string) => {
-  const i = reportSelected.value.indexOf(rel)
-  if (i >= 0) reportSelected.value.splice(i, 1)
-  else reportSelected.value.push(rel)
-}
-
-const reportToggleAll = () => {
-  reportSelected.value = reportAllChecked.value ? [] : reportView.value.map(f => f.rel)
-}
-
-const selectedReportFiles = () => reportFiles.value.filter(f => reportSelected.value.includes(f.rel))
-
-const reportDownloadOne = (f: ReportFile) => {
-  const a = document.createElement('a')
-  a.href = f.url
-  a.download = f.name
-  a.click()
-}
-
-const reportDownloadZip = async () => {
-  const sel = selectedReportFiles()
-  if (!sel.length) return
-  try {
-    const res = await axios.post('/api/reports/zip', { paths: sel.map(f => f.path) }, { responseType: 'blob' })
-    const url = URL.createObjectURL(res.data)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `罗盘报告_${new Date().toISOString().slice(0, 10)}.zip`
-    a.click()
-    URL.revokeObjectURL(url)
-  } catch {
-    messages.value.push({ role: 'system', content: '打包下载失败，请稍后重试。', timestamp: Date.now() })
-  }
-}
-
-const reportDelete = async (targets: ReportFile[]) => {
-  if (!targets.length) return
-  if (!window.confirm(`确认删除这 ${targets.length} 个文件？删除后不可恢复。`)) return
-  try {
-    await axios.post('/api/reports/delete', { paths: targets.map(f => f.path) })
-    const gone = new Set(targets.map(f => f.rel))
-    reportFiles.value = reportFiles.value.filter(f => !gone.has(f.rel))
-    reportSelected.value = reportSelected.value.filter(r => !gone.has(r))
-    recomputeReportSessions()
-    reportTotal.value = reportFiles.value.length
-  } catch {
-    messages.value.push({ role: 'system', content: '删除失败，请稍后重试。', timestamp: Date.now() })
-  }
+const openDataCenter = () => {
+  activeNav.value = 'stats'
+  activeView.value = 'data'
+  isSideNavOpen.value = false
 }
 
 const reportPreview = (f: ReportFile) => {
@@ -926,7 +838,6 @@ onMounted(() => {
   applyTheme()
   connectWebSocket()
   fetchDbStats()
-  loadTables()
   loadReports()
 })
 </script>
@@ -1031,7 +942,7 @@ onMounted(() => {
         <div class="cp-db-row"><span>药品主数据</span><b>{{ dbStats?.drugs ?? '—' }} 种</b></div>
         <div class="cp-db-row"><span>库存记录</span><b>{{ dbStats?.inventory ?? '—' }} 条</b></div>
         <div class="cp-db-row"><span>销售记录</span><b>{{ dbStats?.sales_records ?? '—' }} 条</b></div>
-        <button class="cp-db-more" @click="openDataView()">查看数据明细 →</button>
+        <button class="cp-db-more" @click="openDataCenter()">查看数据明细 →</button>
         <div class="cp-db-foot">pharma.sqlite · 只读白名单</div>
       </div>
 
@@ -1198,8 +1109,12 @@ onMounted(() => {
     </div>
 
     <!-- Main Content -->
-    <main class="main-content" :class="{ 'centered-layout': isWelcomeScreen }">
-      
+    <main
+      class="main-content"
+      :class="{ 'centered-layout': isWelcomeScreen && activeView === 'chat', 'page-mode': activeView !== 'chat' }"
+    >
+      <!-- ============ 页面一：对话工作台 ============ -->
+      <template v-if="activeView === 'chat'">
       <!-- Sidebar Toggle Button -->
       <button 
         v-if="currentSessionPath && !isSidebarOpen" 
@@ -1448,6 +1363,30 @@ onMounted(() => {
           DeepAgents may display inaccurate info, including about people, so double-check its responses.
         </div>
       </footer>
+      </template>
+
+      <!-- ============ 页面二：数据快览 ============ -->
+      <DataView
+        v-else-if="activeView === 'data'"
+        @ask="askFromPage"
+        @open-reports="openReportCenter"
+      />
+
+      <!-- ============ 页面三：报告中心 ============ -->
+      <ReportCenter
+        v-else-if="activeView === 'reports'"
+        @ask="askFromPage"
+        @open-data="openDataCenter"
+        @preview="(f) => { closePreview(); openPreview({ name: f.name, url: f.url }) }"
+        @changed="loadReports"
+      />
+
+      <!-- ============ 页面四：使用指南 ============ -->
+      <GuideView
+        v-else-if="activeView === 'guide'"
+        @ask="askFromPage"
+        @goto="navGo"
+      />
     </main>
 
     <!-- ⑧ 报告在线预览模态框 -->
@@ -1468,229 +1407,95 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- ⑨ 使用指南弹层 -->
-    <div v-if="showGuide" class="cp-preview-mask" @click.self="showGuide = false">
-      <div class="cp-preview-modal cp-guide-modal">
-        <div class="cp-preview-head">
-          <span class="cp-preview-title">使用指南</span>
-          <button class="cp-h-close" @click="showGuide = false">×</button>
+    <!-- 三个功能弹层已升级为独立页面：数据快览 / 报告中心 / 使用指南 -->
+
+    <!-- ======== 右侧「本次会话产物」面板 ======== -->
+    <aside v-if="isSidebarOpen" class="file-sidebar cp-artifact-panel">
+      <div class="cp-art-head">
+        <div class="cp-art-head-l">
+          <div class="cp-art-title">本次会话产物</div>
+          <div class="cp-art-sub">#{{ shortThreadId }} · 罗盘生成的文件会自动出现在这里</div>
         </div>
-        <div class="cp-preview-body cp-guide-body">
-          <div class="cp-guide-item">
-            <div class="cp-guide-ico">🧭</div>
-            <div>
-              <div class="cp-guide-t">直接用大白话提问</div>
-              <div class="cp-guide-d">比如「查询阿莫西林的库存和价格」「统计上个月销售额最高的 5 种药品」，罗盘会自动生成 SQL 去查库。</div>
-            </div>
-          </div>
-          <div class="cp-guide-item">
-            <div class="cp-guide-ico">🤝</div>
-            <div>
-              <div class="cp-guide-t">三位专家助手协同</div>
-              <div class="cp-guide-d">数据库查询助手管内部数据，网络搜索助手查行业资讯，RAGFlow 助手检索企业内部知识（当前云端已熔断降级）。</div>
-            </div>
-          </div>
-          <div class="cp-guide-item">
-            <div class="cp-guide-ico">📄</div>
-            <div>
-              <div class="cp-guide-t">报告一键生成与导出</div>
-              <div class="cp-guide-d">说「生成补货建议报告」，罗盘会产出 Markdown / Word / PDF 文件。左侧「报告中心」跨会话汇总全部产物：按格式筛选、多选打包成 zip、单个预览下载或删除。</div>
-            </div>
-          </div>
-          <div class="cp-guide-item">
-            <div class="cp-guide-ico">⬇️</div>
-            <div>
-              <div class="cp-guide-t">对话可导出</div>
-              <div class="cp-guide-d">左侧栏「导出对话」把当前问答整理成 Markdown 文件保存到本地；「新对话」随时开启新一轮任务。</div>
-            </div>
-          </div>
-          <div class="cp-guide-note">演示环境：短信验证码与扫码均为模拟实现，数据库为内嵌样例数据（药品 10 / 库存 30 / 销售 20 行）。</div>
+        <div class="cp-art-head-r">
+          <button class="cp-art-icon-btn" @click="fetchFiles" title="刷新">↻</button>
+          <button class="cp-art-icon-btn" @click="isSidebarOpen = false" title="关闭">×</button>
         </div>
       </div>
-    </div>
 
-    <!-- ⑩ 数据浏览弹层（表结构 + 真实数据） -->
-    <div v-if="showDataView" class="cp-preview-mask" @click.self="showDataView = false">
-      <div class="cp-preview-modal cp-data-modal">
-        <div class="cp-preview-head">
-          <span class="cp-preview-title">数据快览 · pharma.sqlite</span>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <button class="cp-h-close" @click="loadTables" title="刷新">↻</button>
-            <button class="cp-h-close" @click="showDataView = false">×</button>
-          </div>
-        </div>
-        <div class="cp-data-body">
-          <div class="cp-data-tabs">
-            <button
-              v-for="t in dbTables"
-              :key="t.name"
-              class="cp-data-tab"
-              :class="{ active: activeTable === t.name }"
-              @click="loadTable(t.name)"
-            >
-              <span>{{ TABLE_LABELS[t.name] || t.name }}</span>
-              <em>{{ t.rows }}</em>
-            </button>
-            <div v-if="dbTables.length === 0" class="cp-side-empty">未读取到数据表</div>
-          </div>
-          <div class="cp-data-grid-wrap">
-            <div v-if="tableLoading" class="cp-preview-loading">加载中…</div>
-            <table v-else-if="tableData && tableData.columns.length" class="cp-data-grid">
-              <thead>
-                <tr><th v-for="c in tableData.columns" :key="c">{{ c }}</th></tr>
-              </thead>
-              <tbody>
-                <tr v-for="(r, i) in tableData.rows" :key="i">
-                  <td v-for="(v, j) in r" :key="j">{{ v }}</td>
-                </tr>
-              </tbody>
-            </table>
-            <div v-else class="cp-side-empty">暂无数据</div>
-          </div>
-          <div class="cp-data-foot">
-            只读展示前 20 行 · 表名走白名单校验 · 完整数据请直接向罗盘提问
-          </div>
-        </div>
+      <!-- 概览统计 -->
+      <div class="cp-art-stats">
+        <div class="cp-art-stat"><b>{{ fileList.length }}</b><span>文件</span></div>
+        <div class="cp-art-stat"><b>{{ fmtSize(sessionFileSize) }}</b><span>合计体积</span></div>
+        <div class="cp-art-stat"><b>{{ reportTotal }}</b><span>历史累计</span></div>
       </div>
-    </div>
 
-    <!-- ⑬ 报告中心（跨会话汇总 / 筛选 / 多选打包下载 / 删除 / 预览） -->
-    <div v-if="showReportCenter" class="cp-preview-mask" @click.self="showReportCenter = false">
-      <div class="cp-preview-modal cp-report-modal">
-        <div class="cp-preview-head">
-          <span class="cp-preview-title">报告中心 · 全部产物</span>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <button class="cp-h-close" @click="loadReports" title="刷新">↻</button>
-            <button class="cp-h-close" @click="showReportCenter = false">×</button>
-          </div>
-        </div>
-
-        <div class="cp-rep-body">
-          <!-- 概览统计 -->
-          <div class="cp-rep-stats">
-            <div class="cp-rep-stat">
-              <b>{{ reportTotal }}</b>
-              <span>文件总数</span>
-            </div>
-            <div class="cp-rep-stat">
-              <b>{{ reportSessions.length }}</b>
-              <span>会话数</span>
-            </div>
-            <div class="cp-rep-stat">
-              <b>{{ fmtSize(reportViewSize) }}</b>
-              <span>当前筛选体积</span>
-            </div>
-            <div class="cp-rep-stat">
-              <b>{{ reportSelected.length }}</b>
-              <span>已选中</span>
-            </div>
-          </div>
-
-          <!-- 筛选区 -->
-          <div class="cp-rep-filters">
-            <input
-              v-model="reportKeyword"
-              class="cp-rep-search"
-              type="text"
-              placeholder="搜索文件名 / 路径…"
-            />
-            <select v-model="reportSession" class="cp-rep-select">
-              <option value="">全部会话</option>
-              <option v-for="s in reportSessions" :key="s.id" :value="s.id">
-                {{ s.id.replace('session_', '') }}（{{ s.count }}）
-              </option>
-            </select>
-            <div class="cp-rep-chips">
-              <button
-                v-for="f in EXT_FILTERS"
-                :key="f.key"
-                class="cp-rep-chip"
-                :class="{ active: reportExtKey === f.key }"
-                @click="reportExtKey = f.key"
-              >{{ f.label }}</button>
-            </div>
-          </div>
-
-          <!-- 批量操作条 -->
-          <div class="cp-rep-bar">
-            <button class="cp-rep-check" @click="reportToggleAll">
-              <span class="cp-rep-box" :class="{ on: reportAllChecked }"></span>
-              {{ reportAllChecked ? '取消全选' : '全选当前' }}
-            </button>
-            <span class="cp-rep-count">共 {{ reportView.length }} 个文件</span>
-            <div style="flex:1"></div>
-            <button
-              class="cp-rep-act cp-rep-act-zip"
-              :disabled="reportSelected.length === 0"
-              @click="reportDownloadZip"
-            >打包下载 ({{ reportSelected.length }})</button>
-            <button
-              class="cp-rep-act cp-rep-act-del"
-              :disabled="reportSelected.length === 0"
-              @click="reportDelete(selectedReportFiles())"
-            >删除</button>
-          </div>
-
-          <!-- 文件列表 -->
-          <div class="cp-rep-list">
-            <div v-if="reportLoading" class="cp-preview-loading">加载中…</div>
-            <div v-else-if="reportView.length === 0" class="cp-side-empty">
-              没有匹配的文件——让罗盘「生成一份报告」再回来看看。
-            </div>
-            <template v-else>
-              <div
-                v-for="f in reportView"
-                :key="f.rel"
-                class="cp-rep-row"
-                :class="{ sel: reportSelected.includes(f.rel) }"
-              >
-                <span class="cp-rep-checkbox" :class="{ on: reportSelected.includes(f.rel) }" @click="toggleReportSelect(f.rel)"></span>
-                <span class="cp-rep-tag" :data-ext="f.ext">{{ extTag(f.ext) }}</span>
-                <div class="cp-rep-meta" @click="reportPreview(f)">
-                  <div class="cp-rep-fname">{{ f.name }}</div>
-                  <div class="cp-rep-fsub">
-                    {{ f.session.replace('session_', '') }} · {{ fmtSize(f.size) }} · {{ fmtTime(f.mtime) }}
-                  </div>
-                </div>
-                <div class="cp-rep-row-act">
-                  <button class="cp-rep-mini" @click="reportPreview(f)" title="在线预览">预览</button>
-                  <button class="cp-rep-mini" @click="reportDownloadOne(f)" title="下载">下载</button>
-                  <button class="cp-rep-mini cp-rep-mini-del" @click="reportDelete([f])" title="删除">删除</button>
-                </div>
-              </div>
-            </template>
-          </div>
-        </div>
+      <!-- 格式筛选 -->
+      <div class="cp-art-filters">
+        <button
+          v-for="f in SIDE_FILE_FILTERS"
+          :key="f.key"
+          class="cp-art-chip"
+          :class="{ active: sideFileFilter === f.key }"
+          @click="sideFileFilter = f.key"
+        >{{ f.label }}</button>
       </div>
-    </div>
 
-    <!-- Right Sidebar (File Explorer) -->
-    <aside v-if="isSidebarOpen" class="file-sidebar">
-      <div class="sidebar-header">
-        <h3>Session Files</h3>
-        <div style="display: flex; gap: 8px; align-items: center;">
-            <button class="folder-btn" @click="fetchFiles" title="Refresh Files" style="padding: 4px 8px;">
-                ↻
-            </button>
-            <button class="close-btn" @click="isSidebarOpen = false">×</button>
-        </div>
-      </div>
-      <div class="file-list">
-        <div v-if="fileList.length === 0" class="empty-files">
-          No files generated yet.
-        </div>
-        <div v-else v-for="file in fileList" :key="file.path" class="file-item">
-          <a :href="file.url" target="_blank" class="file-link" :download="file.name">
-            <span class="file-icon">📄</span>
-            <span class="file-name-text">{{ file.name }}</span>
-          </a>
-          <button class="cp-file-eye" @click="openPreview(file)" title="在线预览">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-              <path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z" stroke="currentColor" stroke-width="2"/>
-              <circle cx="12" cy="12" r="2.8" stroke="currentColor" stroke-width="2"/>
+      <!-- 文件列表 -->
+      <div class="cp-art-list">
+        <div v-if="fileList.length === 0" class="cp-art-empty">
+          <div class="cp-art-empty-ico">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+              <path d="M6 3h9l4 4v14H6V3z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+              <path d="M9 12h7M9 16h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
             </svg>
+          </div>
+          <div class="cp-art-empty-t">这次会话还没有生成文件</div>
+          <div class="cp-art-empty-d">
+            罗盘回答时会自动把 Markdown / Word / PDF / CSV 落到这里。
+            直接问一句，或者点下面的示例：
+          </div>
+          <button
+            v-for="h in SIDE_FILE_HINTS"
+            :key="h"
+            class="cp-art-hint"
+            :disabled="status === 'running'"
+            @click="sideAskHint(h)"
+          >
+            <span class="cp-art-hint-dot"></span>{{ h }}
           </button>
+          <div class="cp-art-empty-foot">
+            产物也会同步汇总到「报告中心」，可按格式筛选、打包 zip 下载。
+          </div>
         </div>
+
+        <div v-else-if="sideFileView.length === 0" class="cp-art-empty">
+          <div class="cp-art-empty-t">当前筛选下没有文件</div>
+          <div class="cp-art-empty-d">换一个格式分类，或点「全部」查看所有产物。</div>
+        </div>
+
+        <div
+          v-for="file in sideFileView"
+          v-else
+          :key="file.path"
+          class="cp-art-card"
+        >
+          <span class="cp-rep-tag" :data-ext="sideFileExt(file.name)">{{ extTag(sideFileExt(file.name)) }}</span>
+          <div class="cp-art-meta">
+            <div class="cp-art-name" :title="file.name">{{ file.name }}</div>
+            <div class="cp-art-sub2">{{ fmtSize(file.size) }} · {{ fmtTime(file.mtime) }}</div>
+          </div>
+          <div class="cp-art-acts">
+            <button class="cp-art-mini" @click="openPreview(file)" title="在线预览">预览</button>
+            <a class="cp-art-mini" :href="file.url" :download="file.name" title="下载">下载</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- 面板底部 -->
+      <div class="cp-art-foot">
+        <button class="cp-art-goto" @click="openReportCenter(); isSidebarOpen = false">
+          打开报告中心（跨会话汇总）→
+        </button>
       </div>
     </aside>
   </div>
@@ -1866,14 +1671,370 @@ body {
 }
 .cp-data-grid tr:hover td { background: rgba(58, 168, 120, 0.08); }
 .cp-data-foot { font-size: 11px; color: #6f9486; margin-top: 10px; }
-body.theme-light .cp-side-quick { color: #40534a; border-color: #d9dce7; }
-body.theme-light .cp-side-quick:hover { color: #12362b; border-color: #2f8a63; background: #f0f7f3; }
-body.theme-light .cp-side-hist-title { color: #33364a; }
-body.theme-light .cp-data-tab { background: #f6f7fb; border-color: #d9dce7; color: #4c5064; }
-body.theme-light .cp-data-tab.active { border-color: #2f8a63; color: #12362b; background: #eef4ff; }
-body.theme-light .cp-data-grid th { background: #f0f1f7; color: #262933; border-bottom-color: #d9dce7; }
-body.theme-light .cp-data-grid td { color: #33364a; border-bottom-color: #e6e8f2; }
-body.theme-light .cp-data-foot { color: #8a8fa3; }
+
+/* ===== 浅色模式：左侧栏整套浅色皮肤 =====
+   之前只改了文字颜色、没改侧栏背景，导致深色文字压在深绿底上看不见。 */
+body.theme-light .cp-sidebar {
+  background: linear-gradient(180deg, #ffffff 0%, #eef3f0 100%);
+  border-right-color: #dde5e1;
+}
+body.theme-light .cp-side-brand { border-bottom-color: #e4ebe8; }
+body.theme-light .cp-side-title { color: #12362b; }
+body.theme-light .cp-side-sub { color: #7d918a; }
+
+body.theme-light .cp-nav-item { color: #40604f; font-weight: 500; }
+body.theme-light .cp-nav-item:hover { background: rgba(47, 138, 99, 0.1); color: #12362b; }
+body.theme-light .cp-nav-item.active {
+  background: linear-gradient(90deg, rgba(201, 164, 92, 0.26), rgba(201, 164, 92, 0.07));
+  border-color: rgba(168, 134, 63, 0.55);
+  color: #7d5f14; font-weight: 700;
+}
+body.theme-light .cp-nav-new { color: #8a6b1f; }
+body.theme-light .cp-nav-new:hover { color: #6d5314; }
+body.theme-light .cp-nav-badge { background: linear-gradient(135deg, #c9a45c, #e0c684); color: #3a2c08; }
+
+body.theme-light .cp-side-section { background: #ffffff; border-color: #e4ebe8; }
+body.theme-light .cp-side-sec-title { color: #7d918a; }
+body.theme-light .cp-db-card .cp-db-row { color: #40604f; }
+body.theme-light .cp-db-card .cp-db-row b { color: #8a6b1f; }
+body.theme-light .cp-db-foot { color: #93a8a0; }
+body.theme-light .cp-db-more {
+  background: rgba(201, 164, 92, 0.12);
+  border-color: rgba(168, 134, 63, 0.5);
+  color: #8a6b1f;
+}
+body.theme-light .cp-db-more:hover { background: rgba(201, 164, 92, 0.22); color: #6d5314; }
+
+body.theme-light .cp-side-quick { color: #2f4c41 !important; border-color: #d5e0da; }
+body.theme-light .cp-side-quick:hover { color: #12362b; border-color: #2f8a63; background: #eef6f2; }
+body.theme-light .cp-side-quick svg { color: #a8863f; }
+
+body.theme-light .cp-side-empty { color: #7d918a; }
+body.theme-light .cp-h-clear { color: #93a8a0; }
+body.theme-light .cp-side-history-item:hover { background: #f0f7f3; border-color: #d5e0da; }
+body.theme-light .cp-side-history-item.current { border-color: rgba(168, 134, 63, 0.55); background: #faf6ea; }
+body.theme-light .cp-side-hist-title { color: #2f4c41; }
+body.theme-light .cp-side-hist-time { color: #93a8a0; }
+
+body.theme-light .cp-side-report-item:hover { background: #f0f7f3; border-color: #d5e0da; }
+body.theme-light .cp-rep-name { color: #2f4c41; }
+body.theme-light .cp-rep-size { color: #93a8a0; }
+body.theme-light .cp-conn-text { color: #40604f; }
+body.theme-light .cp-conn-id { color: #93a8a0; }
+body.theme-light .cp-side-foot { border-top-color: #e4ebe8; }
+body.theme-light .cp-side-user-name { color: #12362b; }
+body.theme-light .cp-side-user-tag { color: #7d918a; }
+body.theme-light .cp-side-exit { border-color: #d5e0da; color: #5c7a6d; }
+body.theme-light .cp-side-exit:hover { border-color: #2f8a63; color: #12362b; }
+body.theme-light .cp-side-toggle { background: rgba(255, 255, 255, 0.95); border-color: #d5e0da; color: #40604f; }
+
+/* 用户气泡：底色始终是深绿→金渐变，文字必须保持亮色 */
+.message-user .msg-content { color: #f2fbf6 !important; }
+
+/* ==================================================================
+   独立页面通用样式（数据快览 / 报告中心 / 使用指南 三个子组件共用）
+   统一走 --cp-* 变量，深浅主题自动切换，不再各写一份
+   ================================================================== */
+:root {
+  --cp-bg: #071d16;
+  --cp-surface: #0d2b21;
+  --cp-surface-2: #123a2c;
+  --cp-surface-3: #164535;
+  --cp-border: #1d4a3b;
+  --cp-border-2: #27594a;
+  --cp-text: #eaf3ee;
+  --cp-text-2: #b3ccbe;
+  --cp-text-3: #86a596;
+  --cp-gold: #dcc489;
+  --cp-gold-strong: #ffd166;
+  --cp-green: #3aa878;
+  --cp-red: #ff9c9c;
+  --cp-blue: #9dc0ff;
+  --cp-shadow: 0 12px 34px rgba(0, 0, 0, 0.32);
+}
+body.theme-light {
+  --cp-bg: #f3f4f9;
+  --cp-surface: #ffffff;
+  --cp-surface-2: #f5f8f6;
+  --cp-surface-3: #eaf1ed;
+  --cp-border: #e0e7e4;
+  --cp-border-2: #cfdcd6;
+  --cp-text: #113326;
+  --cp-text-2: #436053;
+  --cp-text-3: #7d918a;
+  --cp-gold: #8a6b1f;
+  --cp-gold-strong: #6d5314;
+  --cp-green: #2f8a63;
+  --cp-red: #c5394a;
+  --cp-blue: #2f5fbe;
+  --cp-shadow: 0 10px 30px rgba(18, 54, 43, 0.1);
+}
+
+.page-mode { overflow-y: auto; display: block; }
+/* 顶部让位已由 .main-content 的 padding-top 统一处理，这里只补一点呼吸感 */
+.page-mode .cp-page { padding-top: 8px; }
+
+.cp-page {
+  min-height: 100%;
+  padding: 26px 30px 40px;
+  color: var(--cp-text);
+  box-sizing: border-box;
+}
+.cp-page-head {
+  display: flex; align-items: flex-start; gap: 16px;
+  margin-bottom: 20px; flex-wrap: wrap;
+}
+.cp-page-title { font-size: 22px; font-weight: 800; letter-spacing: 0.5px; color: var(--cp-text); margin: 0; }
+.cp-page-desc { font-size: 13px; color: var(--cp-text-3); margin-top: 6px; line-height: 1.7; max-width: 720px; }
+.cp-page-head-acts { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.cp-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--cp-surface-2); border: 1px solid var(--cp-border-2);
+  color: var(--cp-text-2); font-size: 12.5px; font-weight: 600;
+  border-radius: 9px; padding: 8px 14px; cursor: pointer;
+  transition: all 0.15s; white-space: nowrap; text-decoration: none;
+}
+.cp-btn:hover { border-color: var(--cp-green); color: var(--cp-text); }
+.cp-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.cp-btn-primary {
+  background: linear-gradient(135deg, #2f8a63, #3aa878);
+  border-color: #46b98a; color: #f2fff9;
+}
+.cp-btn-primary:not(:disabled):hover { filter: brightness(1.1); color: #fff; }
+.cp-btn-gold {
+  background: linear-gradient(135deg, #c9a45c, #e0c684);
+  border-color: #e0c684; color: #3a2c08;
+}
+.cp-btn-gold:not(:disabled):hover { filter: brightness(1.06); }
+.cp-btn-danger { border-color: rgba(226, 92, 92, 0.55); color: var(--cp-red); }
+.cp-btn-danger:not(:disabled):hover { background: rgba(226, 92, 92, 0.14); border-color: #e25c5c; }
+.cp-btn-sm { padding: 5px 11px; font-size: 11.5px; border-radius: 7px; }
+
+.cp-card {
+  background: var(--cp-surface);
+  border: 1px solid var(--cp-border);
+  border-radius: 14px;
+  padding: 16px;
+}
+.cp-card-title {
+  font-size: 13.5px; font-weight: 700; color: var(--cp-text);
+  display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+}
+.cp-card-title .cp-mini-tag {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
+  background: rgba(201, 164, 92, 0.16); color: var(--cp-gold);
+  border: 1px solid rgba(201, 164, 92, 0.35);
+  border-radius: 999px; padding: 1px 8px;
+}
+
+.cp-grid { display: grid; gap: 14px; }
+.cp-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.cp-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.cp-grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+.cp-stat-card {
+  background: var(--cp-surface);
+  border: 1px solid var(--cp-border);
+  border-radius: 14px; padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 4px;
+  position: relative; overflow: hidden;
+}
+.cp-stat-card::after {
+  content: ''; position: absolute; inset: 0 0 auto 0; height: 3px;
+  background: linear-gradient(90deg, #2f8a63, #3aa878, #c9a45c);
+  opacity: 0.75;
+}
+.cp-stat-val { font-size: 24px; font-weight: 800; color: var(--cp-gold); letter-spacing: 0.5px; }
+.cp-stat-label { font-size: 12px; color: var(--cp-text-3); }
+.cp-stat-hint { font-size: 11px; color: var(--cp-text-3); opacity: 0.85; margin-top: 2px; }
+
+.cp-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; padding: 40px 20px; text-align: center;
+  color: var(--cp-text-3); font-size: 13px; line-height: 1.8;
+}
+.cp-empty-ico { color: var(--cp-border-2); }
+
+.cp-divider { height: 1px; background: var(--cp-border); margin: 18px 0; }
+
+/* 报告中心文件行（App.vue 侧栏与 ReportCenter 页共用） */
+.cp-rep-row {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--cp-surface-2);
+  border: 1px solid var(--cp-border); border-radius: 10px;
+  padding: 9px 12px; transition: all 0.15s;
+}
+.cp-rep-row:hover { border-color: var(--cp-green); }
+.cp-rep-row.sel { border-color: #c9a45c; background: rgba(201, 164, 92, 0.1); }
+.cp-rep-checkbox {
+  width: 15px; height: 15px; border-radius: 4px; flex-shrink: 0;
+  border: 1.5px solid var(--cp-border-2); cursor: pointer; position: relative;
+  transition: all 0.15s; background: transparent;
+}
+.cp-rep-checkbox:hover { border-color: #c9a45c; }
+.cp-rep-checkbox.on { background: #3aa878; border-color: #3aa878; }
+.cp-rep-checkbox.on::after {
+  content: ''; position: absolute; left: 4.5px; top: 1.5px;
+  width: 4px; height: 8px;
+  border: solid #08110d; border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+.cp-rep-meta { flex: 1; min-width: 0; cursor: pointer; }
+.cp-rep-fname {
+  font-size: 13px; color: var(--cp-text); font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cp-rep-fsub { font-size: 10.5px; color: var(--cp-text-3); margin-top: 2px; }
+.cp-rep-row-act { display: flex; gap: 6px; flex-shrink: 0; }
+.cp-rep-mini {
+  background: transparent; border: 1px solid var(--cp-border-2); color: var(--cp-text-2);
+  font-size: 11px; border-radius: 7px; padding: 4px 10px; cursor: pointer;
+  transition: all 0.15s; text-decoration: none;
+}
+.cp-rep-mini:hover { border-color: #c9a45c; color: var(--cp-gold); }
+.cp-rep-mini-del:hover { border-color: #e25c5c; color: var(--cp-red); }
+
+/* 侧栏「最近报告」 */
+.cp-side-report-list { display: flex; flex-direction: column; gap: 3px; margin-bottom: 2px; }
+.cp-side-report-item {
+  display: flex; align-items: center; gap: 7px;
+  background: transparent; border: 1px solid transparent;
+  border-radius: 8px; padding: 6px 8px;
+  cursor: pointer; text-align: left; transition: all 0.15s; width: 100%;
+}
+.cp-side-report-item:hover { background: rgba(58, 168, 120, 0.12); border-color: var(--cp-border-2); }
+.cp-rep-name {
+  flex: 1; min-width: 0; font-size: 11.5px; color: var(--cp-text-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cp-rep-size { font-size: 10px; color: var(--cp-text-3); flex-shrink: 0; }
+
+/* 文件类型标签（按后缀着色） */
+.cp-rep-tag {
+  flex-shrink: 0;
+  font-size: 9.5px; font-weight: 800; letter-spacing: 0.4px;
+  border-radius: 5px; padding: 2px 5px; line-height: 1.3;
+  background: rgba(58, 168, 120, 0.16); color: #7fd8ac;
+  border: 1px solid rgba(58, 168, 120, 0.35);
+}
+.cp-rep-tag[data-ext="pdf"] { background: rgba(226, 92, 92, 0.16); color: #ff9c9c; border-color: rgba(226, 92, 92, 0.4); }
+.cp-rep-tag[data-ext="docx"], .cp-rep-tag[data-ext="doc"] { background: rgba(74, 132, 226, 0.18); color: #9dc0ff; border-color: rgba(74, 132, 226, 0.42); }
+.cp-rep-tag[data-ext="csv"], .cp-rep-tag[data-ext="xlsx"], .cp-rep-tag[data-ext="xls"] { background: rgba(52, 162, 122, 0.18); color: #86e0b6; border-color: rgba(52, 162, 122, 0.42); }
+.cp-rep-tag[data-ext="png"], .cp-rep-tag[data-ext="jpg"], .cp-rep-tag[data-ext="jpeg"], .cp-rep-tag[data-ext="svg"], .cp-rep-tag[data-ext="gif"] { background: rgba(201, 164, 92, 0.18); color: #e7c977; border-color: rgba(201, 164, 92, 0.45); }
+body.theme-light .cp-rep-tag { color: #1f7a52; background: #e8f5ee; border-color: #b9e0cd; }
+body.theme-light .cp-rep-tag[data-ext="pdf"] { color: #b8323f; background: #fdecee; border-color: #f2c2c8; }
+body.theme-light .cp-rep-tag[data-ext="docx"],
+body.theme-light .cp-rep-tag[data-ext="doc"] { color: #2f5fbe; background: #ebf1fd; border-color: #c3d5f7; }
+body.theme-light .cp-rep-tag[data-ext="csv"],
+body.theme-light .cp-rep-tag[data-ext="xlsx"],
+body.theme-light .cp-rep-tag[data-ext="xls"] { color: #1f7a52; background: #e8f5ee; border-color: #b9e0cd; }
+body.theme-light .cp-rep-tag[data-ext="png"],
+body.theme-light .cp-rep-tag[data-ext="jpg"],
+body.theme-light .cp-rep-tag[data-ext="jpeg"],
+body.theme-light .cp-rep-tag[data-ext="svg"],
+body.theme-light .cp-rep-tag[data-ext="gif"] { color: #8a6b1f; background: #faf3e2; border-color: #e8d6a8; }
+
+/* ===== 右侧「本次会话产物」面板 ===== */
+/* 与 .main-content 保持一致的顶部让位，避免固定用户栏压住面板标题 */
+.cp-artifact-panel { width: 340px; padding-top: 58px; }
+.cp-art-head {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--cp-border, #27594a);
+}
+.cp-art-head-l { flex: 1; min-width: 0; }
+.cp-art-title { font-size: 14.5px; font-weight: 800; color: var(--cp-text, #eaf3ee); }
+.cp-art-sub { font-size: 10.5px; color: var(--cp-text-3, #86a596); margin-top: 3px; line-height: 1.5; }
+.cp-art-head-r { display: flex; gap: 6px; flex-shrink: 0; }
+.cp-art-icon-btn {
+  width: 26px; height: 26px; border-radius: 8px;
+  background: transparent; border: 1px solid var(--cp-border, #27594a);
+  color: var(--cp-text-2, #b3ccbe); cursor: pointer; font-size: 14px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.cp-art-icon-btn:hover { border-color: #c9a45c; color: var(--cp-gold, #dcc489); }
+
+.cp-art-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 12px 16px 10px; }
+.cp-art-stat {
+  background: var(--cp-surface-2, #123a2c);
+  border: 1px solid var(--cp-border, #1d4a3b);
+  border-radius: 10px; padding: 8px 10px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.cp-art-stat b { font-size: 15px; color: var(--cp-gold, #dcc489); font-weight: 800; }
+.cp-art-stat span { font-size: 10px; color: var(--cp-text-3, #86a596); }
+
+.cp-art-filters { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 12px; }
+.cp-art-chip {
+  background: var(--cp-surface-2, #123a2c);
+  border: 1px solid var(--cp-border, #1d4a3b);
+  color: var(--cp-text-2, #b3ccbe);
+  font-size: 11px; border-radius: 999px; padding: 4px 10px; cursor: pointer;
+  transition: all 0.15s;
+}
+.cp-art-chip:hover { border-color: #c9a45c; color: var(--cp-gold, #dcc489); }
+.cp-art-chip.active { background: rgba(201, 164, 92, 0.2); border-color: #c9a45c; color: var(--cp-gold-strong, #ffd166); font-weight: 700; }
+
+.cp-art-list { flex: 1; overflow-y: auto; padding: 0 16px 12px; display: flex; flex-direction: column; gap: 8px; }
+.cp-art-card {
+  display: flex; align-items: center; gap: 9px;
+  background: var(--cp-surface-2, #123a2c);
+  border: 1px solid var(--cp-border, #1d4a3b);
+  border-radius: 11px; padding: 9px 11px; transition: all 0.15s;
+}
+.cp-art-card:hover { border-color: var(--cp-green, #3aa878); }
+.cp-art-meta { flex: 1; min-width: 0; }
+.cp-art-name {
+  font-size: 12.5px; font-weight: 600; color: var(--cp-text, #eaf3ee);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cp-art-sub2 { font-size: 10px; color: var(--cp-text-3, #86a596); margin-top: 2px; }
+.cp-art-acts { display: flex; gap: 5px; flex-shrink: 0; }
+.cp-art-mini {
+  background: transparent; border: 1px solid var(--cp-border-2, #27594a);
+  color: var(--cp-text-2, #b3ccbe); font-size: 10.5px;
+  border-radius: 7px; padding: 4px 9px; cursor: pointer;
+  transition: all 0.15s; text-decoration: none; line-height: 1.4;
+}
+.cp-art-mini:hover { border-color: #c9a45c; color: var(--cp-gold, #dcc489); }
+
+.cp-art-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; padding: 18px 2px 8px; }
+.cp-art-empty-ico {
+  align-self: center; color: var(--cp-border-2, #27594a);
+  background: var(--cp-surface-2, #123a2c);
+  border: 1px dashed var(--cp-border-2, #27594a);
+  border-radius: 14px; width: 62px; height: 62px;
+  display: flex; align-items: center; justify-content: center;
+}
+.cp-art-empty-t { font-size: 13px; font-weight: 700; color: var(--cp-text, #eaf3ee); align-self: center; }
+.cp-art-empty-d { font-size: 11.5px; color: var(--cp-text-3, #86a596); line-height: 1.75; }
+.cp-art-hint {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  background: var(--cp-surface-2, #123a2c);
+  border: 1px solid var(--cp-border, #1d4a3b);
+  color: var(--cp-text-2, #b3ccbe);
+  font-size: 11.5px; text-align: left;
+  border-radius: 9px; padding: 8px 10px; cursor: pointer; transition: all 0.15s;
+}
+.cp-art-hint:hover { border-color: #c9a45c; color: var(--cp-gold, #dcc489); }
+.cp-art-hint:disabled { opacity: 0.4; cursor: not-allowed; }
+.cp-art-hint-dot {
+  width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0;
+  background: linear-gradient(135deg, #3aa878, #c9a45c);
+}
+.cp-art-empty-foot {
+  font-size: 10.5px; color: var(--cp-text-3, #86a596);
+  line-height: 1.7; border-top: 1px dashed var(--cp-border-2, #27594a);
+  padding-top: 9px; width: 100%;
+}
+.cp-art-foot { padding: 12px 16px; border-top: 1px solid var(--cp-border, #27594a); }
+.cp-art-goto {
+  width: 100%; background: rgba(201, 164, 92, 0.12);
+  border: 1px dashed rgba(201, 164, 92, 0.5);
+  color: var(--cp-gold, #dcc489); font-size: 12px; font-weight: 600;
+  border-radius: 9px; padding: 9px 0; cursor: pointer; transition: all 0.15s;
+}
+.cp-art-goto:hover { background: rgba(201, 164, 92, 0.22); color: var(--cp-gold-strong, #ffd166); }
 
 .cp-conn-card {
   display: flex; align-items: center; gap: 8px;
@@ -1961,6 +2122,10 @@ body.theme-light .cp-guide-note { color: #8a8fa3; border-top-color: #d9dce7; }
   position: relative;
   background-color: var(--bg-dark);
   min-width: 0; /* Prevent flex overflow */
+  /* 固定右上角用户栏（主题/历史/退出）浮在内容之上，这里统一让出顶部空间，
+     否则首条消息气泡、右侧产物面板标题、独立页面页头都会被压住 */
+  padding-top: 58px;
+  box-sizing: border-box;
 }
 
 .sidebar-toggle-btn {
@@ -2921,10 +3086,14 @@ body.theme-light .cp-brand-badge { color: #7a7f92; border-color: #d9dce7; }
   background: linear-gradient(90deg, rgba(58,168,120,0.55), rgba(201,164,92,0.35), transparent 80%);
   border-radius: 2px;
 }
+/* 用户气泡：深绿→金渐变（金色端压暗一档，保证亮色文字两段都清晰） */
 .message-user .msg-content {
-  background: linear-gradient(120deg, #1d5c49 0%, #237a58 55%, #c9a45c 100%) !important;
+  background: linear-gradient(120deg, #10402f 0%, #1b6449 48%, #9a7a37 100%) !important;
+  color: #f4fbf7 !important;
+  font-weight: 500;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
   box-shadow: 0 8px 22px rgba(58, 168, 120, 0.28);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 /* 时间线浮条渐变描边 */
@@ -3084,159 +3253,4 @@ body.theme-light .cp-quick-chip:hover {
   pointer-events: none;
 }
 
-/* ================= ⑬ 报告中心 ================= */
-/* 侧栏「最近报告」 */
-.cp-side-report-list { display: flex; flex-direction: column; gap: 3px; margin-bottom: 2px; }
-.cp-side-report-item {
-  display: flex; align-items: center; gap: 7px;
-  background: transparent; border: 1px solid transparent;
-  border-radius: 8px; padding: 6px 8px;
-  cursor: pointer; text-align: left; transition: all 0.15s; width: 100%;
-}
-.cp-side-report-item:hover { background: rgba(58, 168, 120, 0.12); border-color: #235445; }
-.cp-rep-name {
-  flex: 1; min-width: 0;
-  font-size: 11.5px; color: #c2d8cd;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.cp-rep-size { font-size: 10px; color: #6f9486; flex-shrink: 0; }
-
-/* 文件类型标签（按后缀着色） */
-.cp-rep-tag {
-  flex-shrink: 0;
-  font-size: 9.5px; font-weight: 800; letter-spacing: 0.4px;
-  border-radius: 5px; padding: 2px 5px; line-height: 1.3;
-  background: rgba(58, 168, 120, 0.16); color: #7fd8ac;
-  border: 1px solid rgba(58, 168, 120, 0.35);
-}
-.cp-rep-tag[data-ext="pdf"] { background: rgba(226, 92, 92, 0.16); color: #ff9c9c; border-color: rgba(226, 92, 92, 0.4); }
-.cp-rep-tag[data-ext="docx"], .cp-rep-tag[data-ext="doc"] { background: rgba(74, 132, 226, 0.18); color: #9dc0ff; border-color: rgba(74, 132, 226, 0.42); }
-.cp-rep-tag[data-ext="csv"], .cp-rep-tag[data-ext="xlsx"], .cp-rep-tag[data-ext="xls"] { background: rgba(52, 162, 122, 0.18); color: #86e0b6; border-color: rgba(52, 162, 122, 0.42); }
-.cp-rep-tag[data-ext="png"], .cp-rep-tag[data-ext="jpg"], .cp-rep-tag[data-ext="jpeg"], .cp-rep-tag[data-ext="svg"], .cp-rep-tag[data-ext="gif"] { background: rgba(201, 164, 92, 0.18); color: #e7c977; border-color: rgba(201, 164, 92, 0.45); }
-
-/* 报告中心弹层 */
-.cp-report-modal { max-width: 940px; width: 94vw; height: auto; max-height: min(86vh, 880px); }
-.cp-rep-body { padding: 14px 18px 18px; overflow: hidden; display: flex; flex-direction: column; }
-.cp-rep-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px; }
-.cp-rep-stat {
-  background: rgba(201, 164, 92, 0.07);
-  border: 1px solid rgba(201, 164, 92, 0.22);
-  border-radius: 10px; padding: 9px 12px;
-  display: flex; flex-direction: column; gap: 2px;
-}
-.cp-rep-stat b { font-size: 17px; color: #ecd9a8; letter-spacing: 0.3px; }
-.cp-rep-stat span { font-size: 10.5px; color: #6f9486; }
-
-.cp-rep-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
-.cp-rep-search {
-  flex: 1; min-width: 160px;
-  background: rgba(9, 30, 23, 0.75); border: 1px solid #235445;
-  color: #dfeee7; font-size: 12.5px;
-  border-radius: 9px; padding: 7px 11px; outline: none;
-}
-.cp-rep-search:focus { border-color: #c9a45c; }
-.cp-rep-select {
-  background: rgba(9, 30, 23, 0.75); border: 1px solid #235445;
-  color: #c2d8cd; font-size: 12.5px;
-  border-radius: 9px; padding: 7px 10px; outline: none; cursor: pointer;
-}
-.cp-rep-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.cp-rep-chip {
-  background: rgba(13, 43, 33, 0.7); border: 1px solid #235445;
-  color: #a8c3b4; font-size: 11.5px;
-  border-radius: 999px; padding: 5px 11px; cursor: pointer; transition: all 0.15s;
-}
-.cp-rep-chip:hover { border-color: #c9a45c; color: #ecd9a8; }
-.cp-rep-chip.active { background: rgba(201, 164, 92, 0.2); border-color: #c9a45c; color: #ffd166; font-weight: 700; }
-
-.cp-rep-bar {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 12px; margin-bottom: 10px;
-  background: rgba(9, 30, 23, 0.55);
-  border: 1px solid #1d4a3b; border-radius: 10px;
-}
-.cp-rep-check {
-  display: flex; align-items: center; gap: 7px;
-  background: transparent; border: none; color: #a8c3b4;
-  font-size: 12px; cursor: pointer; padding: 0;
-}
-.cp-rep-check:hover { color: #ecd9a8; }
-.cp-rep-box {
-  width: 15px; height: 15px; border-radius: 4px;
-  border: 1.5px solid #3a705e; display: inline-block; position: relative; transition: all 0.15s;
-}
-.cp-rep-box.on, .cp-rep-checkbox.on { background: #3aa878; border-color: #3aa878; }
-.cp-rep-box.on::after, .cp-rep-checkbox.on::after {
-  content: ''; position: absolute; left: 4.5px; top: 1.5px;
-  width: 4px; height: 8px;
-  border: solid #08110d; border-width: 0 2px 2px 0; transform: rotate(45deg);
-}
-.cp-rep-count { font-size: 11.5px; color: #6f9486; }
-.cp-rep-act {
-  border-radius: 8px; padding: 6px 14px; font-size: 12px; font-weight: 700;
-  cursor: pointer; transition: all 0.15s; border: 1px solid transparent;
-}
-.cp-rep-act:disabled { opacity: 0.35; cursor: not-allowed; }
-.cp-rep-act-zip {
-  background: linear-gradient(135deg, #2f8a63, #3aa878);
-  color: #eafff4; border-color: #46b98a;
-}
-.cp-rep-act-zip:not(:disabled):hover { filter: brightness(1.12); }
-.cp-rep-act-del {
-  background: transparent; border-color: rgba(226, 92, 92, 0.55); color: #ff9c9c;
-}
-.cp-rep-act-del:not(:disabled):hover { background: rgba(226, 92, 92, 0.16); }
-
-.cp-rep-list { flex: 1; min-height: 120px; max-height: 48vh; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px; }
-.cp-rep-row {
-  display: flex; align-items: center; gap: 10px;
-  background: rgba(13, 43, 33, 0.55);
-  border: 1px solid #1d4a3b; border-radius: 10px;
-  padding: 9px 12px; transition: all 0.15s;
-}
-.cp-rep-row:hover { border-color: #2f8a63; background: rgba(20, 60, 46, 0.7); }
-.cp-rep-row.sel { border-color: #c9a45c; background: rgba(201, 164, 92, 0.09); }
-.cp-rep-checkbox {
-  width: 15px; height: 15px; border-radius: 4px; flex-shrink: 0;
-  border: 1.5px solid #3a705e; cursor: pointer; position: relative; transition: all 0.15s;
-}
-.cp-rep-checkbox:hover { border-color: #c9a45c; }
-.cp-rep-meta { flex: 1; min-width: 0; cursor: pointer; }
-.cp-rep-fname {
-  font-size: 13px; color: #dfeee7; font-weight: 600;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.cp-rep-fsub { font-size: 10.5px; color: #6f9486; margin-top: 2px; }
-.cp-rep-row-act { display: flex; gap: 6px; flex-shrink: 0; }
-.cp-rep-mini {
-  background: transparent; border: 1px solid #235445; color: #a8c3b4;
-  font-size: 11px; border-radius: 7px; padding: 4px 10px; cursor: pointer; transition: all 0.15s;
-}
-.cp-rep-mini:hover { border-color: #c9a45c; color: #ecd9a8; }
-.cp-rep-mini-del:hover { border-color: #e25c5c; color: #ff9c9c; }
-
-/* 报告中心：浅色主题 */
-body.theme-light .cp-side-report-item:hover { background: #f0f7f3; border-color: #cfe0d6; }
-body.theme-light .cp-rep-name { color: #33364a; }
-body.theme-light .cp-rep-stat { background: #f7f9fb; border-color: #dfe4ea; }
-body.theme-light .cp-rep-stat b { color: #12362b; }
-body.theme-light .cp-rep-stat span { color: #8a8fa3; }
-body.theme-light .cp-rep-search,
-body.theme-light .cp-rep-select { background: #ffffff; border-color: #d9dce7; color: #33364a; }
-body.theme-light .cp-rep-chip { background: #f6f7fb; border-color: #d9dce7; color: #4c5064; }
-body.theme-light .cp-rep-chip.active { background: #eef4ff; border-color: #2f8a63; color: #12362b; }
-body.theme-light .cp-rep-bar { background: #f6f7fb; border-color: #d9dce7; }
-body.theme-light .cp-rep-check { color: #4c5064; }
-body.theme-light .cp-rep-count { color: #8a8fa3; }
-body.theme-light .cp-rep-row { background: #ffffff; border-color: #d9dce7; }
-body.theme-light .cp-rep-row:hover { background: #f0f7f3; border-color: #2f8a63; }
-body.theme-light .cp-rep-row.sel { background: #f7f4ea; border-color: #c9a45c; }
-body.theme-light .cp-rep-fname { color: #262933; }
-body.theme-light .cp-rep-mini { border-color: #d9dce7; color: #4c5064; }
-body.theme-light .cp-rep-mini:hover { border-color: #2f8a63; color: #12362b; }
-
-@media (max-width: 720px) {
-  .cp-rep-stats { grid-template-columns: 1fr 1fr; }
-  .cp-rep-row-act .cp-rep-mini:first-child { display: none; }
-}
 </style>
