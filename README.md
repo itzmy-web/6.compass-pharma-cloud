@@ -6,7 +6,7 @@
 FastAPI + WebSocket 推流执行过程，Vue3 前端，内嵌 SQLite 样例库，
 **单端口即可完整跑起来**，无需 MySQL / Redis 等外部服务。
 
-**线上演示：** https://compass-pharma-cloud.app.workbuddy.host/
+**线上演示：** http://39.107.107.246:8084/
 
 ---
 
