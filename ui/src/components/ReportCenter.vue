@@ -142,7 +142,7 @@ const downloadZip = async () => {
     const url = URL.createObjectURL(res.data as Blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `罗盘报告_${new Date().toISOString().slice(0, 10)}.zip`
+    a.download = `航策向标报告_${new Date().toISOString().slice(0, 10)}.zip`
     document.body.appendChild(a)
     a.click()
     a.remove()
@@ -173,7 +173,7 @@ const removeFiles = async (list: ReportFile[]) => {
 
 const removeAll = () => removeFiles(filtered.value)
 
-// ===== 引导：怎么让罗盘生成报告 =====
+// ===== 引导：怎么让航策向标生成报告 =====
 const GEN_TIPS = [
   { q: '生成一份上月销售分析报告（Markdown）', tag: '分析类' },
   { q: '哪些药品库存低于安全线？生成补货建议报告', tag: '运营类' },
@@ -195,7 +195,7 @@ defineExpose({ reload: loadReports })
       <div>
         <h1 class="cp-page-title">报告中心</h1>
         <p class="cp-page-desc">
-          跨会话汇总罗盘生成的全部产物：查询结果、分析报告、数据表、图表。
+          跨会话汇总航策向标生成的全部产物：查询结果、分析报告、数据表、图表。
           支持按类型 / 会话筛选、关键词检索，多选后可一键打包下载或批量删除。
         </p>
       </div>
@@ -287,7 +287,7 @@ defineExpose({ reload: loadReports })
             <path :d="EXT_ICON" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
           </svg>
           <div class="gen-empty-title">还没有生成任何报告</div>
-          <div class="gen-empty-sub">在对话框里直接说出你要的成果，罗盘会跑完子智能体并把文件落到这里。</div>
+          <div class="gen-empty-sub">在对话框里直接说出你要的成果，航策向标会跑完子智能体并把文件落到这里。</div>
           <div class="gen-empty-btns">
             <button v-for="t in GEN_TIPS" :key="t.q" class="sample-btn" @click="emit('ask', t.q)">
               <span class="sample-dot"></span>
@@ -343,7 +343,7 @@ defineExpose({ reload: loadReports })
 
         <div class="cp-card">
           <div class="cp-card-title">
-            怎么让罗盘写报告
+            怎么让航策向标写报告
             <span class="cp-mini-tag">点一下就直接问</span>
           </div>
           <button v-for="t in GEN_TIPS" :key="t.q" class="sample-btn" @click="emit('ask', t.q)">

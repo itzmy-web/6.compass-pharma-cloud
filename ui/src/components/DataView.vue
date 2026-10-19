@@ -177,7 +177,7 @@ onMounted(async () => {
         <h1 class="cp-page-title">数据快览</h1>
         <p class="cp-page-desc">
           内嵌 <code>pharma.sqlite</code> 样例库的只读浏览：药品主数据 / 库存记录 / 销售记录三张表。
-          可切换查看、按关键词过滤、调整行数、导出 CSV；要交叉分析或出结论，直接在对话框问罗盘。
+          可切换查看、按关键词过滤、调整行数、导出 CSV；要交叉分析或出结论，直接在对话框问航策向标。
         </p>
       </div>
       <div class="cp-page-head-acts">
@@ -273,7 +273,7 @@ onMounted(async () => {
         </div>
 
         <div class="table-foot">
-          只读展示 · 表名走 <code>sqlite_master</code> 白名单校验 · 超过 100 行请直接向罗盘提问聚合
+          只读展示 · 表名走 <code>sqlite_master</code> 白名单校验 · 超过 100 行请直接向航策向标提问聚合
         </div>
       </section>
 

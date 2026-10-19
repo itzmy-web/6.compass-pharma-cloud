@@ -60,7 +60,7 @@ async def lifespan(app):
     _seed_demo_reports()
     yield
 
-app = FastAPI(title='罗盘项目 - deep_agent_search', lifespan=lifespan)
+app = FastAPI(title='航策向标 - deep_agent_search', lifespan=lifespan)
 
 
 @app.post('/api/task')

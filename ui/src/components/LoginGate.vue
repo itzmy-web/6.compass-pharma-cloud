@@ -207,15 +207,15 @@ const quickEnter = () => {
             <circle cx="12" cy="12" r="3.2" fill="#c9a45c"/>
           </svg>
         </div>
-        <div class="brand-name">罗盘项目</div>
+        <div class="brand-name">航策向标</div>
         <div class="brand-menu" aria-hidden="true">
           <span></span><span></span><span></span>
         </div>
       </div>
 
       <div class="hero-block">
-        <h1 class="hero-title">经营罗盘</h1>
-        <p class="hero-sub">市场、竞争与经营态势分析平台</p>
+        <h1 class="hero-title">航策向标</h1>
+        <p class="hero-sub">业务趋势的智能风向标，定位业务方向</p>
         <div class="hero-tags">
           <span class="hero-tag">指标导航</span>
           <span class="hero-tag">竞争感知</span>
@@ -228,7 +228,7 @@ const quickEnter = () => {
     <div class="auth-pane">
       <div class="auth-card">
         <h2 class="auth-title">欢迎登录</h2>
-        <p class="auth-sub">登录后进入罗盘智能工作台，历史记录跟随账号保存</p>
+        <p class="auth-sub">登录后进入航策向标智能工作台，历史记录跟随账号保存</p>
 
         <!-- Tab 切换 -->
         <div class="channel-tabs">

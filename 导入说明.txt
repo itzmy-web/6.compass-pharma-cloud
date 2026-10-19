@@ -1,4 +1,4 @@
-罗盘项目（deep_agent_search）—— PyCharm 导入说明
+航策向标（deep_agent_search）—— PyCharm 导入说明
 ================================================
 
 【这是什么】
@@ -13,7 +13,7 @@ DeepAgents 多智能体项目：主智能体协调三个子智能体
 - .venv 虚拟环境已建好（依赖已装齐）
 
 【PyCharm 导入步骤】
-1. File → Open → 选择本文件夹（罗盘项目）
+1. File → Open → 选择本文件夹（航策向标）
 2. 等待索引完成；若提示配置解释器：
    Settings → Project → Python Interpreter → Add Interpreter → Existing
    → 选 本文件夹\.venv\Scripts\python.exe

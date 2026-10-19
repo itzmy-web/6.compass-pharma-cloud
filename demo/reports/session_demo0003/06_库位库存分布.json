@@ -1,7 +1,7 @@
 {
   "meta": {
     "source": "pharma.sqlite · inventory",
-    "generated_by": "罗盘医药智能体 · 数据库查询子智能体",
+    "generated_by": "航策向标 · 数据库查询子智能体",
     "note": "库位维度库存分布，仅含内置样例数据",
     "total_on_hand": 336000,
     "location_count": 27

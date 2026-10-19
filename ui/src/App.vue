@@ -678,17 +678,17 @@ const exportChat = () => {
     isSideNavOpen.value = false
     return
   }
-  const lines: string[] = ['# 罗盘对话记录', '', `- 导出时间：${new Date().toLocaleString()}`, '']
+  const lines: string[] = ['# 航策向标对话记录', '', `- 导出时间：${new Date().toLocaleString()}`, '']
   for (const m of messages.value) {
     if (m.role === 'user') lines.push(`## 🙋 提问\n\n${m.content}\n`)
-    else if (m.role === 'ai') lines.push(`## 🧭 罗盘回答\n\n${m.content}\n`)
+    else if (m.role === 'ai') lines.push(`## 🧭 航策向标回答\n\n${m.content}\n`)
     else lines.push(`> ${m.content}\n`)
   }
   const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `罗盘对话_${new Date().toISOString().slice(0, 10)}.md`
+  a.download = `航策向标对话_${new Date().toISOString().slice(0, 10)}.md`
   a.click()
   URL.revokeObjectURL(url)
   isSideNavOpen.value = false
@@ -857,8 +857,8 @@ onMounted(() => {
           </svg>
         </div>
         <div>
-          <div class="cp-side-title">经营罗盘</div>
-          <div class="cp-side-sub">罗盘项目 · PHARMA AI</div>
+          <div class="cp-side-title">航策向标</div>
+          <div class="cp-side-sub">航策向标 · PHARMA AI</div>
         </div>
       </div>
 
@@ -918,7 +918,7 @@ onMounted(() => {
           <button class="cp-h-clear" @click="loadReports" title="刷新">↻</button>
         </div>
         <div v-if="recentReports.length === 0" class="cp-side-empty">
-          暂无产物，让罗盘「生成一份报告」试试
+          暂无产物，让航策向标「生成一份报告」试试
         </div>
         <div v-else class="cp-side-report-list">
           <button
@@ -1042,7 +1042,7 @@ onMounted(() => {
           <path d="M15.5 8.5L13.2 13.2L8.5 15.5L10.8 10.8L15.5 8.5Z" fill="#fff"/>
         </svg>
       </div>
-      <span class="cp-brand-name">罗盘智能体</span>
+      <span class="cp-brand-name">航策向标</span>
       <span class="cp-brand-badge">PHARMA AI AGENT</span>
     </div>
 
@@ -1156,7 +1156,7 @@ onMounted(() => {
               <h1 class="cp-hero-title">一句话，问遍<br /><span class="cp-hero-grad">药品 · 库存 · 销售</span></h1>
               <p class="cp-hero-sub">
                 三个专家助手协同工作：数据库问答、网络资讯检索、报告一键生成。
-                问出好问题，剩下的交给罗盘。
+                问出好问题，剩下的交给航策向标。
               </p>
               <div class="cp-hero-stats">
                 <div class="cp-hstat"><span class="cp-hstat-num">{{ qaCount }}</span><span class="cp-hstat-label">本机累计提问</span></div>
@@ -1414,7 +1414,7 @@ onMounted(() => {
       <div class="cp-art-head">
         <div class="cp-art-head-l">
           <div class="cp-art-title">本次会话产物</div>
-          <div class="cp-art-sub">#{{ shortThreadId }} · 罗盘生成的文件会自动出现在这里</div>
+          <div class="cp-art-sub">#{{ shortThreadId }} · 航策向标生成的文件会自动出现在这里</div>
         </div>
         <div class="cp-art-head-r">
           <button class="cp-art-icon-btn" @click="fetchFiles" title="刷新">↻</button>
@@ -1451,7 +1451,7 @@ onMounted(() => {
           </div>
           <div class="cp-art-empty-t">这次会话还没有生成文件</div>
           <div class="cp-art-empty-d">
-            罗盘回答时会自动把 Markdown / Word / PDF / CSV 落到这里。
+            航策向标回答时会自动把 Markdown / Word / PDF / CSV 落到这里。
             直接问一句，或者点下面的示例：
           </div>
           <button
